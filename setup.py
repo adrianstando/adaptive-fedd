@@ -11,5 +11,6 @@ setup(
     author='Adrian Stańdo',
     author_email="adrsnek11@live.com",
     license='MIT',
-    install_requires=required
+    # install_requires=required,
+    python_requires="==3.12.2",
 )
