@@ -7,7 +7,7 @@ from sklearn.feature_selection import mutual_info_regression
 from scipy.spatial.distance import cosine
 from tsfresh.feature_extraction.feature_calculators import c3 as bicorrelation
 from collections import deque
-from typing import Union
+from typing import Union, List
 
 
 class EWMA:
@@ -122,6 +122,13 @@ def slice_deque(dq, i_min, i_max):
         for i in range(i_min, i_max)
     ]
 
+def append_to_queue(queue, x):
+    if isinstance(x, list):
+        for elem in x:
+            queue.append(elem)
+    else:
+        queue.append(x)
+
 
 class FEDD(DriftDetector):
     def __init__(self, Lambda: float = 0.2, drift_threshold: float = 3, window_size: int = 100, padding: int = 10, 
@@ -147,12 +154,12 @@ class FEDD(DriftDetector):
             self._training_length = window_size * (train_size + 1)
             self._training_queue = deque(maxlen=self._training_length)
 
-    def update(self, x: Union[int, float]) -> None:
-        self._queue.append(x)
+    def update(self, x: Union[int, float, List]) -> None:        
+        append_to_queue(self._queue, x)
 
         # before training - just collect data
-        if not self._is_fitted and len(self._training_queue) < self._training_length:
-            self._training_queue.append(x)
+        if not self._is_fitted and len(self._training_queue) < self._training_length:            
+            append_to_queue(self._training_queue, x)
         
         # training
         elif not self._is_fitted and len(self._training_queue) == self._training_length:
