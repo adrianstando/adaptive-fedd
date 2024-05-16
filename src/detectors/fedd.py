@@ -8,10 +8,10 @@ from tsfresh.feature_extraction.feature_calculators import c3 as bicorrelation
 from collections import deque
 from typing import Union, List
 
-from src.detectors import VirtualDriftDetector
+from src.detectors.base import VirtualDriftDetector, FeatureExtractor, BasicDriftDetector
 
 
-class EWMA:
+class EWMA(BasicDriftDetector):
     def __init__(self, Lambda: float = 0.2, drift_threshold: float = 3):
         super().__init__()
         self.Lambda = Lambda
@@ -45,7 +45,7 @@ class EWMA:
         self.ewma_std = np.sqrt(parte5) * self.initial_std
 
 
-class FeatureExtractor:
+class OriginalFeatureExtractor(FeatureExtractor):
     def __init__(self, autocorrelation_lags: int = 5, partial_autocorrelation_lags: int = 5,
                  bicorrelation_lags: int = 3, mutual_information_lags: int = 3):
         self.autocorrelation_lags = autocorrelation_lags
@@ -135,7 +135,7 @@ class FEDD(VirtualDriftDetector):
     def __init__(self, Lambda: float = 0.2, drift_threshold: float = 3, window_size: int = 100, padding: int = 10, 
                  train_size: int = 10, queue_data: bool = True):
         self.detector = EWMA(Lambda, drift_threshold)
-        self.feature_extractor = FeatureExtractor()
+        self.feature_extractor = OriginalFeatureExtractor()
 
         self.window_size = window_size
         self.train_size = train_size
