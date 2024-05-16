@@ -53,7 +53,7 @@ class OriginalFeatureExtractor(FeatureExtractor):
         self.bicorrelation_lags = bicorrelation_lags
         self.mutual_information_lags = mutual_information_lags
 
-    def extract_features(self, time_series: pd.DataFrame) -> List:
+    def extract_features(self, time_series: pd.DataFrame) -> pd.Series:
         series_diff = pd.Series(time_series['value'])
         series_diff = series_diff - series_diff.shift()
         series_diff = series_diff[1:]
@@ -114,7 +114,7 @@ class OriginalFeatureExtractor(FeatureExtractor):
                 mutual_info_regression(ts1, ts2)[0]
             )
 
-        return features
+        return pd.Series(features)
     
 
 def slice_deque(dq, i_min, i_max):
@@ -122,6 +122,7 @@ def slice_deque(dq, i_min, i_max):
         dq[i]
         for i in range(i_min, i_max)
     ]
+
 
 def append_to_queue(queue, x):
     if isinstance(x, list):
@@ -165,7 +166,7 @@ class FEDD(VirtualDriftDetector):
         # training
         elif not self._is_fitted and len(self._training_queue) == self._training_length:
             s0 = slice_deque(self._training_queue, 0, self.window_size)
-            v0 = self.feature_extractor.extract_features(pd.DataFrame({'value': s0}))
+            v0 = list(self.feature_extractor.extract_features(pd.DataFrame({'value': s0})))
             self.v0 = v0
 
             d_list = []
@@ -174,7 +175,7 @@ class FEDD(VirtualDriftDetector):
                     s = slice_deque(self._training_queue, i * self.padding, self.window_size + i * self.padding)
                 else:
                     s = slice_deque(self._training_queue, i * self.window_size, (i + 1) * self.window_size)
-                v = self.feature_extractor.extract_features(pd.DataFrame({'value': s}))
+                v = list(self.feature_extractor.extract_features(pd.DataFrame({'value': s})))
                 d = self.compute_distance_to_initial(np.array(v))
                 d_list.append(d)
             
@@ -183,7 +184,7 @@ class FEDD(VirtualDriftDetector):
 
         # monitoring
         elif self._is_fitted:
-            if self.queue_data and len(self._queue) < self.window_size:
+            if not self.queue_data and len(self._queue) < self.window_size:
                 return
             s = list(self._queue)
             v = self.feature_extractor.extract_features(pd.DataFrame({'value': s}))
@@ -197,6 +198,6 @@ class FEDD(VirtualDriftDetector):
     
     @property
     def drift_detected(self):
-        if self.queue_data:
+        if not self.queue_data:
             self._queue = deque(maxlen=self.window_size)
         return self._drift_detected

@@ -4,7 +4,7 @@ from river.forest import ARFRegressor
 from river.utils.random import poisson
 from typing import Optional, List
 
-from src.detectors import VirtualDriftDetector
+from src.detectors.base import VirtualDriftDetector
 
 
 class ARFRegressorVirtualDrift(ARFRegressor):

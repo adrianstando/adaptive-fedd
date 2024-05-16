@@ -11,7 +11,7 @@ class VirtualDriftDetector(DriftDetector):
 
 class FeatureExtractor:
     @abc.abstractmethod
-    def extract_features(self, time_series: pd.DataFrame) -> List:
+    def extract_features(self, time_series: pd.DataFrame) -> pd.Series:
         pass
 
 class BasicDriftDetector:
