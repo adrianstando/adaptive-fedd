@@ -1,13 +1,14 @@
 import pandas as pd
 import numpy as np
 
-from river.base import DriftDetector
 from statsmodels.tsa.stattools import acf, pacf
 from sklearn.feature_selection import mutual_info_regression
 from scipy.spatial.distance import cosine
 from tsfresh.feature_extraction.feature_calculators import c3 as bicorrelation
 from collections import deque
 from typing import Union, List
+
+from src.detectors import VirtualDriftDetector
 
 
 class EWMA:
@@ -130,7 +131,7 @@ def append_to_queue(queue, x):
         queue.append(x)
 
 
-class FEDD(DriftDetector):
+class FEDD(VirtualDriftDetector):
     def __init__(self, Lambda: float = 0.2, drift_threshold: float = 3, window_size: int = 100, padding: int = 10, 
                  train_size: int = 10, queue_data: bool = True):
         self.detector = EWMA(Lambda, drift_threshold)
