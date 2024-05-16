@@ -1,6 +1,7 @@
 from river import time_series
 from river import base
 
+
 class AROnline(time_series.SNARIMAX):
     def __init__(
         self,
