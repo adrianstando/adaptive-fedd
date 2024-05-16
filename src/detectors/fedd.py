@@ -42,7 +42,7 @@ class EWMA(BasicDriftDetector):
         parte4 = 1 - (parte2 ** parte3)
 
         parte5 = (parte1 * parte4 * self.initial_std)
-        self.ewma_std = np.sqrt(parte5) * self.initial_std
+        self.ewma_std = np.sqrt(float(parte5)) * self.initial_std
 
 
 class OriginalFeatureExtractor(FeatureExtractor):
@@ -53,7 +53,7 @@ class OriginalFeatureExtractor(FeatureExtractor):
         self.bicorrelation_lags = bicorrelation_lags
         self.mutual_information_lags = mutual_information_lags
 
-    def extract_features(self, time_series: pd.DataFrame) -> list:
+    def extract_features(self, time_series: pd.DataFrame) -> List:
         series_diff = pd.Series(time_series['value'])
         series_diff = series_diff - series_diff.shift()
         series_diff = series_diff[1:]

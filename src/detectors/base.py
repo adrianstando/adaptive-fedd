@@ -6,12 +6,12 @@ from typing import Union, List
 
 class VirtualDriftDetector(DriftDetector):
     @abc.abstractmethod
-    def update(self, x: Union[int, float, List]) -> DriftDetector:
+    def update(self, x: Union[int, float, List]) -> None:
         pass
 
 class FeatureExtractor:
     @abc.abstractmethod
-    def extract_features(self, time_series: pd.DataFrame) -> list:
+    def extract_features(self, time_series: pd.DataFrame) -> List:
         pass
 
 class BasicDriftDetector:
