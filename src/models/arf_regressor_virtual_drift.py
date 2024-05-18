@@ -5,6 +5,7 @@ from river.utils.random import poisson
 from typing import Optional, List
 
 from src.detectors.base import VirtualDriftDetector
+from src.detectors.adaptive_fedd import AdaptiveFEDD
 
 
 class ARFRegressorVirtualDrift(ARFRegressor):
@@ -16,6 +17,14 @@ class ARFRegressorVirtualDrift(ARFRegressor):
         )
         self._rng = random.Random(self.seed)
         self.virtual_drift_columns = virtual_drift_columns
+
+        if hasattr(drift_detector, 'grace_period'):
+            self.grace_period = drift_detector.grace_period # type: ignore
+        else:
+            self.grace_period = 0
+
+        self._background_drift_detectors = [None for _ in range(self.n_models)]
+        self._background_data_grace_period = [[] for _ in range(self.n_models)]
 
     def learn_one(self, x: dict, y: numbers.Number, **kwargs):
         # the function is very similar to the original one with one major change: 
@@ -55,18 +64,53 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                     if self._warning_detectors[i].drift_detected:
                         self._background[i] = self._new_base_model()  # type: ignore
                         # Reset the warning detector for the current object
-                        self._warning_detectors[i] = self.warning_detector.clone()
+                        if isinstance(self._warning_detectors[i], AdaptiveFEDD):
+                            fs = self._warning_detectors[i].observed_features # type: ignore
+                            self._warning_detectors[i] = self.warning_detector.clone()
+                            self._warning_detectors[i].observed_features = fs # type: ignore
+                        else:
+                            self._warning_detectors[i] = self.warning_detector.clone()
 
                         # Update warning tracker
                         self._warning_tracker[i] += 1
 
                 if not self._drift_detection_disabled:
+                    if self.grace_period > 0  \
+                        and self._background_drift_detectors[i] is not None \
+                        and isinstance(self._drift_detectors[i], AdaptiveFEDD):
+
+                        self._background_drift_detectors[i].update(drift_input) # type: ignore
+                        self._background_data_grace_period[i].append(drift_input)
+
                     self._drift_detectors[i].update(drift_input) # type: ignore
+
+                    # if grace period is over, push weight changes on the old detector and train a new one
+                    if self.grace_period > 0 \
+                        and self._background_drift_detectors[i] is not None \
+                        and isinstance(self._drift_detectors[i], AdaptiveFEDD) \
+                        and len(self._background_data_grace_period[i]) == self.grace_period:
+
+                        self._background_drift_detectors[i].push_weight_changes() # type: ignore
+                        self._warning_detectors[i] = self.warning_detector.clone()
+                        self._drift_detectors[i] = self.drift_detector.clone()
+
+                        for elem in self._background_data_grace_period[i]:
+                            self._warning_detectors[i].update(elem)
+                            self._drift_detectors[i].update(elem)
+
+                        self._background_data_grace_period[i] = []
+                        self._background_drift_detectors[i] = None
 
                     if self._drift_detectors[i].drift_detected:
                         if not self._warning_detection_disabled and self._background[i] is not None:
+                            # model background
                             self.data[i] = self._background[i]
                             self._background[i] = None
+
+                            # detector background
+                            if self.grace_period > 0 and isinstance(self._drift_detectors[i], AdaptiveFEDD):
+                                self._background_drift_detectors[i] = self._drift_detectors[i] # type: ignore
+                            
                             self._warning_detectors[i] = self.warning_detector.clone()
                             self._drift_detectors[i] = self.drift_detector.clone()
                             self._metrics[i] = self.metric.clone()
@@ -77,3 +121,4 @@ class ARFRegressorVirtualDrift(ARFRegressor):
 
                         # Update warning tracker
                         self._drift_tracker[i] += 1
+                        
