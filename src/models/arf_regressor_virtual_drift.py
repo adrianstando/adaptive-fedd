@@ -1,5 +1,6 @@
 import numbers
 import random
+
 from river.forest import ARFRegressor
 from river.utils.random import poisson
 from typing import Optional, List
@@ -26,21 +27,27 @@ class ARFRegressorVirtualDrift(ARFRegressor):
         self._background_drift_detectors = [None for _ in range(self.n_models)]
         self._background_data_grace_period = [[] for _ in range(self.n_models)]
 
-    def learn_one(self, x: dict, y: numbers.Number, **kwargs):
-        # the function is very similar to the original one with one major change: 
-        # the detectors are virtual drift detectors, which accept as an input a list of values
-        if len(self) == 0:
-            self._init_ensemble(sorted(x.keys()))
+        if isinstance(drift_detector, AdaptiveFEDD) and isinstance(warning_detector, AdaptiveFEDD):
+            for i in range(len(self._warning_detectors)):
+                self._warning_detectors[i].observed_features = self._drift_detectors[i].observed_features # type: ignore
 
+    def learn_one(self, x: dict, y: numbers.Number, **kwargs):
         # create a list of values of the selected columns in the input dict
         # drift input is a list
         if self.virtual_drift_columns is None:
             drift_input = list(x.values())
         else:
-            drift_input = [
-                x[column]
-                for column in self.virtual_drift_columns
-            ]
+            drift_input = []
+            for column in self.virtual_drift_columns:
+                if column not in x.keys():
+                    return
+                else:
+                    drift_input.append(x[column])
+        
+        # the function is very similar to the original one with one major change: 
+        # the detectors are virtual drift detectors, which accept as an input a list of values
+        if len(self) == 0:
+            self._init_ensemble(sorted(x.keys()))
 
         for i, model in enumerate(self):
             y_pred = model.predict_one(x)

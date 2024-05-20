@@ -1,5 +1,6 @@
 import abc
 import pandas as pd
+
 from river.base import DriftDetector
 from typing import Union, List
 
@@ -9,10 +10,17 @@ class VirtualDriftDetector(DriftDetector):
     def update(self, x: Union[int, float, List]) -> None:
         pass
 
+    @property
+    @abc.abstractmethod
+    def drift_detected(self) -> bool:
+        pass
+
+
 class FeatureExtractor:
     @abc.abstractmethod
     def extract_features(self, time_series: pd.DataFrame) -> pd.Series:
         pass
+
 
 class BasicDriftDetector:
     @abc.abstractmethod

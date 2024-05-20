@@ -9,40 +9,7 @@ from collections import deque
 from typing import Union, List
 
 from src.detectors.base import VirtualDriftDetector, FeatureExtractor, BasicDriftDetector
-
-
-class EWMA(BasicDriftDetector):
-    def __init__(self, Lambda: float = 0.2, drift_threshold: float = 3):
-        super().__init__()
-        self.Lambda = Lambda
-        self.drift_threshold = drift_threshold
-
-        self.initial_average = 0
-        self.initial_std = 0
-        self.ewma_std = 0
-        self.ewma = 0
-        self.time = 0
-
-    def add_training_elements(self, values: list) -> None:
-        self.initial_average = np.mean(values)
-        self.initial_std = np.std(values)
-        self.ewma = self.initial_average
-
-    def detect(self, value: float) -> bool:
-        self.update_ewma(value)
-        return bool(self.ewma > self.initial_average + self.drift_threshold * self.ewma_std)
-
-    def update_ewma(self, distance: float) -> None:
-        self.ewma = (1 - self.Lambda) * self.ewma + self.Lambda * distance
-        self.time += 1
-
-        parte1 = self.Lambda / (2 - self.Lambda)
-        parte2 = 1 - self.Lambda
-        parte3 = 2 * self.time
-        parte4 = 1 - (parte2 ** parte3)
-
-        parte5 = (parte1 * parte4 * self.initial_std)
-        self.ewma_std = np.sqrt(float(parte5)) * self.initial_std
+from src.detectors import EWMA
 
 
 class OriginalFeatureExtractor(FeatureExtractor):
@@ -138,6 +105,9 @@ class FEDD(VirtualDriftDetector):
         self.detector = EWMA(Lambda, drift_threshold)
         self.feature_extractor = OriginalFeatureExtractor()
 
+        self.Lambda = Lambda
+        self.drift_threshold = drift_threshold
+
         self.window_size = window_size
         self.train_size = train_size
         self.padding = padding
@@ -197,7 +167,7 @@ class FEDD(VirtualDriftDetector):
         return float(cosine(self.v0, array) / 2)
     
     @property
-    def drift_detected(self):
+    def drift_detected(self) -> bool:
         if not self.queue_data:
             self._queue = deque(maxlen=self.window_size)
         return self._drift_detected
