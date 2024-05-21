@@ -183,7 +183,7 @@ class AdaptiveFeatureExtarctor(FeatureExtractor):
                 out[statistic_name] = [params]
         return out
 
-    def update(self, idx: Optional[int], feature_history: Dict) -> None:
+    def update(self, idx: Optional[int], feature_history: Dict, observed_features: List[str]) -> None:
         for feature_name, feature_ts in feature_history.items():
             adwin = deepcopy(self.drift_detector)
             detected = []
@@ -198,6 +198,10 @@ class AdaptiveFeatureExtarctor(FeatureExtractor):
             else:
                 drift_start = idx - (len(feature_ts) - idx)
                 false_positive, n_detected, true_positive, n_truth = metrics([drift_start], detected, True) # type: ignore
+
+                if feature_name in observed_features:
+                    # make sure that features which led to well-based drift detection are rewarded
+                    true_positive = max(1, true_positive)
 
                 self.metadata.loc[self.metadata.features == feature_name, 'false_positives'] += false_positive # type: ignore
                 self.metadata.loc[self.metadata.features == feature_name, 'n_detected'] += n_detected # type: ignore
@@ -254,8 +258,8 @@ class AdaptiveFEDD(FEDD):
     def __init__(self, window_size: int = 100, padding: int = 10, queue_data: bool = True,
                  feature_extractor: AdaptiveFeatureExtarctor = AdaptiveFeatureExtarctor(), n_observed_features: int = 30, *args, **kwargs):
         detector = ADWIN(*args, **kwargs)
-        self.grace_period = detector.adwin.grace_period
-        super().__init__(0.2, float("Inf"), window_size, padding, self.grace_period, queue_data)
+        self._grace_period = detector.adwin.grace_period
+        super().__init__(0.2, float("Inf"), window_size, padding, self._grace_period, queue_data)
         self.detector = detector
         self.feature_extractor = feature_extractor
         self.observed_features = self.feature_extractor.sample_features(n_observed_features)
@@ -266,6 +270,15 @@ class AdaptiveFEDD(FEDD):
         }
         self._drift_index = -1
 
+    @property
+    def grace_period(self):
+        return self._grace_period
+    
+    @grace_period.setter
+    def grace_period(self, value):
+        self._grace_period = value
+        self.detector.adwin.grace_period = value
+
     def add_features_to_history(self, features: pd.Series) -> None:
         for name in features.index:
             self.feature_history[name.replace('value__', '').replace('values__', '')].append(features[name])
@@ -274,7 +287,8 @@ class AdaptiveFEDD(FEDD):
         if self._drift_index != -1:
             self.feature_extractor.update(
                 idx=self._drift_index,
-                feature_history=self.feature_history
+                feature_history=self.feature_history,
+                observed_features=self.observed_features
             )
 
     def update(self, x: Union[int, float, List]) -> None:        
