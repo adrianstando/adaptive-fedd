@@ -8,8 +8,8 @@ from tsfresh.feature_extraction.feature_calculators import c3 as bicorrelation
 from collections import deque
 from typing import Union, List
 
-from src.detectors.base import VirtualDriftDetector, FeatureExtractor, BasicDriftDetector
-from src.detectors import EWMA
+from .base import VirtualDriftDetector, FeatureExtractor, BasicDriftDetector
+from .ewma import EWMA
 
 
 class OriginalFeatureExtractor(FeatureExtractor):

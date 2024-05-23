@@ -15,8 +15,8 @@ class Experiment:
         self.data = data
         self.max_len = data.shape[0]
         self.current_idx = 0
-        self._timestamp_data_type = 'timestamp' if isinstance(data.ilox[0]['timestamp'], pd.Timestamp) else 'int'
-        self._stride = data['timestamp'].diff().min() if isinstance(data.ilox[0]['timestamp'], pd.Timestamp) else 1
+        self._timestamp_data_type = 'timestamp' if isinstance(data.iloc[0]['timestamp'], pd.Timestamp) else 'int'
+        self._stride = data['timestamp'].diff().min() if isinstance(data.iloc[0]['timestamp'], pd.Timestamp) else 1
 
         self.predictions = pd.DataFrame(columns=['origin', 'timestamp', 'value'])
 
@@ -25,7 +25,11 @@ class Experiment:
         out = values.copy()
         out['origin'] = origin
         out = out[['origin', 'timestamp', 'value']]
-        self.predictions = pd.concat([self.predictions, out])
+
+        if self.predictions.shape[0] == 0:
+            self.predictions = out
+        else:
+            self.predictions = pd.concat([self.predictions, out])
 
     def future_timestamps(self, horizon: int) -> List[Union[pd.Timestamp, int]]: # type: ignore
         # normal situation
@@ -60,9 +64,9 @@ class Experiment:
         
 
     def step(self) -> None:
-        self._step(self.data.iloc[self.current_idx]['timestamp'], self.data.iloc[self.current_idx]['value'])
+        self._step(self.current_idx, self.data.iloc[self.current_idx]['timestamp'], self.data.iloc[self.current_idx]['value'])
         self.current_idx += 1
 
     @abstractmethod
-    def _step(self, timestamp: Union[pd.Timestamp, int], value: Union[float, int]):
+    def _step(self, idx: int, timestamp: Union[pd.Timestamp, int], value: Union[float, int]) -> None:
         ...

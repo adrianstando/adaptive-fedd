@@ -10,9 +10,9 @@ from sklearn.feature_selection import mutual_info_regression
 from tsfresh.feature_extraction import ComprehensiveFCParameters
 from typing import Union, List, Dict, Optional
 
-from src.detectors import FEDD, ADWIN
-from src.detectors.fedd import append_to_queue, slice_deque
-from src.detectors.base import FeatureExtractor, BasicDriftDetector
+from .adwin import ADWIN
+from .fedd import FEDD, append_to_queue, slice_deque
+from .base import FeatureExtractor, BasicDriftDetector
 
 
 @feature_calculators.set_property("fctype", "simple")
@@ -91,42 +91,16 @@ def metrics(truth, detected, return_counts=False):
         return false_positive, len(detected), true_positive, len(truth)
     else:
         return fdr, tpr
-
-
-class AdaptiveFeatureExtarctor(FeatureExtractor):
-    def __init__(self, metadata: pd.DataFrame = pd.DataFrame(), drift_detector: BasicDriftDetector = ADWIN()):
-        super().__init__()
-        self.drift_detector = drift_detector
-        
-        if metadata.shape[0] == 0:
-            self.main_params = ComprehensiveFCParameters()
-            self.all_feature_names = list(
-                self.extract_features(pd.DataFrame({
-                    'values': [1 for _ in range(10)],
-                    'timestamp': [i for i in range(10)]
-                })).index
-            )
-            self.all_feature_names = [
-                elem.replace('value__', '').replace('values__', '')
-                for elem in self.all_feature_names
-            ]
-
-            self.metadata = pd.DataFrame({
-                'features': self.all_feature_names,
-                'weight': [1 for _ in range(len(self.all_feature_names))],
-                'true_positives': [0 for _ in range(len(self.all_feature_names))],
-                'false_positives': [0 for _ in range(len(self.all_feature_names))],
-                'n_truth': [0 for _ in range(len(self.all_feature_names))],
-                'n_detected': [0 for _ in range(len(self.all_feature_names))]
-            })
-
-        else:
-            self.main_params = self.names_to_dict_with_params(metadata['features'].tolist())
-            # columns: feature, weight, true_positives, false_positives, n_truth, n_detected
-            self.metadata = metadata 
-            self.all_feature_names = self.metadata['features'].tolist() # type: ignore
     
-    def sample_features(self, n: int = 30):
+
+class MetadataManager:
+    def __init__(self, metadata: pd.DataFrame = pd.DataFrame()) -> None:
+        self.metadata = metadata
+
+    def get_feature_names(self) -> List:
+        return self.metadata['features'].tolist()
+    
+    def sample_features(self, n: int = 30) -> List:
         sum_of_weights = np.sum(self.metadata['weight']) # type: ignore
         p = np.array(self.metadata['weight'] / sum_of_weights) # type: ignore
         features = np.array(self.metadata['features']) # type: ignore
@@ -139,6 +113,69 @@ class AdaptiveFeatureExtarctor(FeatureExtractor):
         )
 
         return list(features[selected_idx])
+    
+    def update_weight(self, feature: str, false_positive: int, n_detected: int, true_positive: int, n_truth: int) -> None:
+        self.metadata.loc[self.metadata.features == feature, 'false_positives'] += false_positive
+        self.metadata.loc[self.metadata.features == feature, 'n_detected'] += n_detected
+        self.metadata.loc[self.metadata.features == feature, 'true_positives'] += true_positive
+        self.metadata.loc[self.metadata.features == feature, 'n_truth'] += n_truth
+
+        tp = self.metadata.loc[self.metadata.features == feature, 'true_positives'].iloc[0]
+        fp = self.metadata.loc[self.metadata.features == feature, 'false_positives'].iloc[0]
+        nt = self.metadata.loc[self.metadata.features == feature, 'n_truth'].iloc[0]
+        nd = self.metadata.loc[self.metadata.features == feature, 'n_detected'].iloc[0]
+
+        tpr = tp / nt if not np.isnan(tp / nt) else 0
+        fdr = fp / nd if not np.isnan(fp / nd) else 1
+
+        if tpr == 0 and fdr == 0:
+            self.metadata.loc[self.metadata.features == feature, 'weight'] = 0
+        else:
+            self.metadata.loc[self.metadata.features == feature, 'weight'] = np.sqrt(2) - np.sqrt(
+                (1 - tpr) ** 2 + fdr ** 2
+            )
+
+
+class AdaptiveFeatureExtarctor(FeatureExtractor):
+    def __init__(self, metadata: Union[pd.DataFrame, MetadataManager] = pd.DataFrame(), drift_detector: BasicDriftDetector = ADWIN()):
+        super().__init__()
+        self.drift_detector = drift_detector
+
+        if isinstance(metadata, pd.DataFrame):
+            if metadata.shape[0] == 0:
+                self.main_params = ComprehensiveFCParameters()
+                self.all_feature_names = list(
+                    self.extract_features(pd.DataFrame({
+                        'values': [1 for _ in range(10)],
+                        'timestamp': [i for i in range(10)]
+                    })).index
+                )
+                self.all_feature_names = [
+                    elem.replace('value__', '').replace('values__', '')
+                    for elem in self.all_feature_names
+                ]
+
+                self.metadata = MetadataManager(pd.DataFrame({
+                    'features': self.all_feature_names,
+                    'weight': [1 for _ in range(len(self.all_feature_names))],
+                    'true_positives': [0 for _ in range(len(self.all_feature_names))],
+                    'false_positives': [0 for _ in range(len(self.all_feature_names))],
+                    'n_truth': [0 for _ in range(len(self.all_feature_names))],
+                    'n_detected': [0 for _ in range(len(self.all_feature_names))]
+                }))
+
+            else:
+                self.main_params = self.names_to_dict_with_params(metadata['features'].tolist())
+                # columns: feature, weight, true_positives, false_positives, n_truth, n_detected
+                self.metadata = MetadataManager(metadata )
+                self.all_feature_names = self.metadata.get_feature_names()
+        else:
+            self.metadata = metadata
+            self.all_feature_names = self.metadata.get_feature_names()
+            self.main_params = self.names_to_dict_with_params(self.all_feature_names)
+    
+    def sample_features(self, n: int = 30) -> List:
+        return self.metadata.sample_features(n=n)
 
     @staticmethod
     def names_to_dict_with_params(lst: List[str]) -> Dict:
@@ -193,8 +230,17 @@ class AdaptiveFeatureExtarctor(FeatureExtractor):
                     detected.append(i)
             
             if idx is None:
-                self.metadata.loc[self.metadata.feature == feature_name, 'false_positives'] += len(detected) # type: ignore
-                self.metadata.loc[self.metadata.feature == feature_name, 'n_detected'] += len(detected) # type: ignore
+                n_detected = len(detected)
+                if feature_name in observed_features:
+                     # make sure that features which led to not well-based drift detection are punished
+                    n_detected = max(1, n_detected)
+                
+                self.metadata.update_weight(
+                    feature=feature_name, 
+                    false_positive=n_detected, n_detected=n_detected, 
+                    true_positive=0, n_truth=0
+                )
+
             else:
                 drift_start = idx - (len(feature_ts) - idx)
                 false_positive, n_detected, true_positive, n_truth = metrics([drift_start], detected, True) # type: ignore
@@ -203,18 +249,11 @@ class AdaptiveFeatureExtarctor(FeatureExtractor):
                     # make sure that features which led to well-based drift detection are rewarded
                     true_positive = max(1, true_positive)
 
-                self.metadata.loc[self.metadata.features == feature_name, 'false_positives'] += false_positive # type: ignore
-                self.metadata.loc[self.metadata.features == feature_name, 'n_detected'] += n_detected # type: ignore
-                self.metadata.loc[self.metadata.features == feature_name, 'true_positives'] += true_positive # type: ignore
-                self.metadata.loc[self.metadata.features == feature_name, 'n_truth'] += n_truth # type: ignore
-
-            self.metadata = self.metadata.copy()
-            self.metadata['tpr'] = (self.metadata['true_positives'] / self.metadata['n_truth']).fillna(0)
-            self.metadata['fdr'] = (self.metadata['false_positives'] / self.metadata['n_detected']).fillna(1)
-            self.metadata['weight'] = 2 ** 0.5 - ((1 - self.metadata['tpr']) ** 2 + self.metadata['fdr'] ** 2) ** 0.5
-            self.metadata.loc[np.logical_and(self.metadata.tpr == 0, self.metadata.fdr == 0), 'weight'] = 0
-            self.metadata = self.metadata[['features', 'weight', 'true_positives', 'false_positives', 'n_truth', 'n_detected']]
-            self.metadata = self.metadata.copy()
+                self.metadata.update_weight(
+                    feature=feature_name, 
+                    false_positive=int(false_positive), n_detected=int(n_detected), 
+                    true_positive=true_positive, n_truth=n_truth
+                )
 
     def extract_features(self, time_series: pd.DataFrame) -> pd.Series:
         main_params = self.main_params.copy()
@@ -283,10 +322,10 @@ class AdaptiveFEDD(FEDD):
         for name in features.index:
             self.feature_history[name.replace('value__', '').replace('values__', '')].append(features[name])
     
-    def push_weight_changes(self):
+    def push_weight_changes(self, is_better: bool = True):
         if self._drift_index != -1:
             self.feature_extractor.update(
-                idx=self._drift_index,
+                idx=self._drift_index if is_better else None,
                 feature_history=self.feature_history,
                 observed_features=self.observed_features
             )

@@ -24,14 +24,14 @@ class ARBatch(time_series.SNARIMAX):
     ):
         super().__init__(p, 0, 0, 1, 0, 0, 0, None)
         self.regressor = regressor
-        self.train_size = train_size
+        self.train_size = train_size - p
         self.__train_queue = []
         self.__trained = False
 
     def learn_one(self, y, x=None):
         if not self.__trained:
             if len(self.y_diff) >= self.p:
-                x = self._add_lag_features(x=x, Y=self.y_diff, errors=[0 for _ in range(len(self.y_diff))])
+                x = self._add_lag_features(x=x, Y=list(self.y_diff), errors=[0 for _ in range(len(self.y_diff))])
                 self.__train_queue.append((x, y))
 
                 if len(self.__train_queue) >= self.train_size:
