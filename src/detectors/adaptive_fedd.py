@@ -114,6 +114,9 @@ class MetadataManager:
 
         return list(features[selected_idx])
     
+    def get_metadata(self) -> pd.DataFrame:
+        return self.metadata
+    
     def update_weight(self, feature: str, false_positive: int, n_detected: int, true_positive: int, n_truth: int) -> None:
         self.metadata.loc[self.metadata.features == feature, 'false_positives'] += false_positive
         self.metadata.loc[self.metadata.features == feature, 'n_detected'] += n_detected
