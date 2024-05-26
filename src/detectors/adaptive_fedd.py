@@ -301,11 +301,11 @@ class AdaptiveFeatureExtarctor(FeatureExtractor):
 
 
 class AdaptiveFEDD(FEDD):
-    def __init__(self, window_size: int = 100, padding: int = 10, queue_data: bool = True,
+    def __init__(self, window_size: int = 100, stride: int = 10, queue_data: bool = True,
                  feature_extractor: AdaptiveFeatureExtarctor = AdaptiveFeatureExtarctor(), n_observed_features: int = 30, *args, **kwargs):
         detector = ADWIN(*args, **kwargs)
         self._grace_period = detector.adwin.grace_period
-        super().__init__(0.2, float("Inf"), window_size, padding, self._grace_period, queue_data)
+        super().__init__(0.2, float("Inf"), window_size, stride, self._grace_period, queue_data)
         self.detector = detector
         self.feature_extractor = feature_extractor
         self.observed_features = self.feature_extractor.sample_features(n_observed_features)
@@ -350,7 +350,7 @@ class AdaptiveFEDD(FEDD):
             
             for i in range(self.train_size):
                 if self.queue_data:
-                    s = slice_deque(self._training_queue, i * self.padding, self.window_size + i * self.padding)
+                    s = slice_deque(self._training_queue, i * self.stride, self.window_size + i * self.stride)
                 else:
                     s = slice_deque(self._training_queue, i * self.window_size, (i + 1) * self.window_size)
 

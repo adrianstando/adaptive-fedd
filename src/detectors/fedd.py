@@ -100,7 +100,7 @@ def append_to_queue(queue, x):
 
 
 class FEDD(VirtualDriftDetector):
-    def __init__(self, Lambda: float = 0.2, drift_threshold: float = 3, window_size: int = 100, padding: int = 10, 
+    def __init__(self, Lambda: float = 0.2, drift_threshold: float = 3, window_size: int = 100, stride: int = 10, 
                  train_size: int = 10, queue_data: bool = True):
         self.detector = EWMA(Lambda, drift_threshold)
         self.feature_extractor = OriginalFeatureExtractor()
@@ -110,7 +110,7 @@ class FEDD(VirtualDriftDetector):
 
         self.window_size = window_size
         self.train_size = train_size
-        self.padding = padding
+        self.stride = stride
 
         self._queue = deque(maxlen=window_size)
         self._drift_detected = False
@@ -120,7 +120,7 @@ class FEDD(VirtualDriftDetector):
         self.v0 = np.array([])
 
         if self.queue_data:
-            self._training_length = window_size + padding * train_size
+            self._training_length = window_size + stride * train_size
             self._training_queue = deque(maxlen=self._training_length)
         else:
             self._training_length = window_size * (train_size + 1)
@@ -142,7 +142,7 @@ class FEDD(VirtualDriftDetector):
             d_list = []
             for i in range(1, self.train_size):
                 if self.queue_data:
-                    s = slice_deque(self._training_queue, i * self.padding, self.window_size + i * self.padding)
+                    s = slice_deque(self._training_queue, i * self.stride, self.window_size + i * self.stride)
                 else:
                     s = slice_deque(self._training_queue, i * self.window_size, (i + 1) * self.window_size)
                 v = list(self.feature_extractor.extract_features(pd.DataFrame({'value': s})))
