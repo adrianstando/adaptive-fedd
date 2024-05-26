@@ -76,7 +76,7 @@ class BatchLearningExperiment(Experiment):
 
         # initial case: no model trained before
         if idx < self.train_size:
-            self.model.learn_one(y, x) # type: ignore
+            self.model.learn_one(x, y) # type: ignore
             self.detector.update(y)
         else:
             # if enough data for retraining
@@ -134,7 +134,7 @@ class BatchLearningExperiment(Experiment):
                     })
                 )
 
-            self.model.learn_one(y, x) # type: ignore
+            self.model.learn_one(x, y) # type: ignore
 
             self.detector.update(y) # type: ignore
             if self.detector.drift_detected and self._background_model is None:
@@ -176,5 +176,5 @@ class BatchLearningExperiment(Experiment):
                                 )
 
                 self._background_counter += 1
-                self._background_model.learn_one(y, x) # type: ignore
+                self._background_model.learn_one(x, y) # type: ignore
                 self._background_detector.update(y) # type: ignore

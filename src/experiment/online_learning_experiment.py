@@ -22,7 +22,7 @@ class OnlineLearningExperiment(Experiment):
 
         # initial case: grace period to be able to compare with other methods
         if idx < self.initial_grace_period:
-            self.model.learn_one(y, x) # type: ignore
+            self.model.learn_one(x, y) # type: ignore
         else:
             if idx % self.stride == self._modulo_for_predictions:
                 # normal predictions with stride
@@ -40,4 +40,4 @@ class OnlineLearningExperiment(Experiment):
                     })
                 )
 
-            self.model.learn_one(y, x) # type: ignore
+            self.model.learn_one(x, y) # type: ignore
