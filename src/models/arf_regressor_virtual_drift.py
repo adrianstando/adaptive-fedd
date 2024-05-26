@@ -24,7 +24,9 @@ class ARFRegressorVirtualDrift(ARFRegressor):
         else:
             self.grace_period = 0
 
-        self._background_drift_detectors = [None for _ in range(self.n_models)]
+        self._background_old_drift_detectors = [None for _ in range(self.n_models)]
+        self._background_old_trees = [None for _ in range(self.n_models)]
+        self._background_old_metric = [None for _ in range(self.n_models)]
         self._background_data_grace_period = [[] for _ in range(self.n_models)]
 
         if isinstance(drift_detector, AdaptiveFEDD) and isinstance(warning_detector, AdaptiveFEDD):
@@ -58,6 +60,13 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                 y_pred=y_pred,
             )
 
+            # update validation performance for Adaptive FEDD
+            if self._background_old_trees[i] is not None:
+                self._background_old_metric[i].update(
+                    y_true=y,
+                    y_pred=self._background_old_trees[i].predict_one(x),
+                )
+
             k = poisson(rate=self.lambda_value, rng=self._rng) # type: ignore
             if k > 0:
                 if not self._warning_detection_disabled and self._background[i] is not None:
@@ -84,10 +93,10 @@ class ARFRegressorVirtualDrift(ARFRegressor):
 
                 if not self._drift_detection_disabled:
                     if self.grace_period > 0  \
-                        and self._background_drift_detectors[i] is not None \
+                        and self._background_old_drift_detectors[i] is not None \
                         and isinstance(self._drift_detectors[i], AdaptiveFEDD):
 
-                        self._background_drift_detectors[i].update(drift_input) # type: ignore
+                        self._background_old_drift_detectors[i].update(drift_input) # type: ignore
                         self._background_data_grace_period[i].append([k, drift_input])
 
                     for _ in range(int(k)):
@@ -95,11 +104,13 @@ class ARFRegressorVirtualDrift(ARFRegressor):
 
                     # if grace period is over, push weight changes on the old detector and train a new one
                     if self.grace_period > 0 \
-                        and self._background_drift_detectors[i] is not None \
+                        and self._background_old_drift_detectors[i] is not None \
                         and isinstance(self._drift_detectors[i], AdaptiveFEDD) \
                         and len(self._background_data_grace_period[i]) == self.grace_period:
 
-                        self._background_drift_detectors[i].push_weight_changes() # type: ignore
+                        self._background_old_drift_detectors[i].push_weight_changes(
+                            is_better=self._metric[i].is_better_than(self._background_old_metric[i]) # checks test-than-train metric between the new and ol model
+                        )
                         self._warning_detectors[i] = self.warning_detector.clone()
                         self._drift_detectors[i] = self.drift_detector.clone()
 
@@ -109,18 +120,22 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                                 self._drift_detectors[i].update(elem)
 
                         self._background_data_grace_period[i] = []
-                        self._background_drift_detectors[i] = None
+                        self._background_old_drift_detectors[i] = None
+                        self._background_old_trees[i] = None
+                        self._background_old_metric[i] = None
 
                     if self._drift_detectors[i].drift_detected:
                         if not self._warning_detection_disabled and self._background[i] is not None:
+                            # old detector and model to background
+                            if self.grace_period > 0 and isinstance(self._drift_detectors[i], AdaptiveFEDD):
+                                self._background_old_drift_detectors[i] = self._drift_detectors[i] # type: ignore
+                                self._background_old_trees[i] = self.data[i]
+                                self._background_old_metric[i] = self.metric.clone()
+
                             # model background
                             self.data[i] = self._background[i]
                             self._background[i] = None
 
-                            # detector background
-                            if self.grace_period > 0 and isinstance(self._drift_detectors[i], AdaptiveFEDD):
-                                self._background_drift_detectors[i] = self._drift_detectors[i] # type: ignore
-                            
                             self._warning_detectors[i] = self.warning_detector.clone()
                             self._drift_detectors[i] = self.drift_detector.clone()
                             self._metrics[i] = self.metric.clone()
