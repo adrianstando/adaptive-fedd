@@ -103,12 +103,6 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                         self._warning_detectors[i] = self.warning_detector.clone()
                         self._drift_detectors[i] = self.drift_detector.clone()
 
-                        if isinstance(self._warning_detectors[i], AdaptiveFEDD):
-                            # update grace period to fit for bootstrap
-                            gp = sum([k_weight for k_weight, _ in self._background_data_grace_period[i]])
-                            self._warning_detectors[i].grace_period = gp # type: ignore
-                            self._drift_detectors[i].grace_period = gp # type: ignore
-
                         for k_weight, elem in self._background_data_grace_period[i]:
                             for _ in range(k_weight):
                                 self._warning_detectors[i].update(elem)
