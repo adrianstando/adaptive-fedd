@@ -94,8 +94,12 @@ def metrics(truth, detected, return_counts=False):
     
 
 class MetadataManager:
-    def __init__(self, metadata: pd.DataFrame = pd.DataFrame()) -> None:
+    def __init__(self, metadata: pd.DataFrame = pd.DataFrame(), random_seed: Optional[int] = None) -> None:
         self.metadata = metadata
+        self.random_seed = random_seed
+        
+        if random_seed is not None:
+            np.random.seed(random_seed)
 
     def get_feature_names(self) -> List:
         return self.metadata['features'].tolist()
