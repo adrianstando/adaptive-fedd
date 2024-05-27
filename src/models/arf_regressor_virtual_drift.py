@@ -75,8 +75,7 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                 model.learn_one(x=x, y=y, w=k)
 
                 if not self._warning_detection_disabled:
-                    for _ in range(int(k)):
-                        self._warning_detectors[i].update(drift_input) # type: ignore
+                    self._warning_detectors[i].update(drift_input) # type: ignore
 
                     if self._warning_detectors[i].drift_detected:
                         self._background[i] = self._new_base_model()  # type: ignore
@@ -97,10 +96,9 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                         and isinstance(self._drift_detectors[i], AdaptiveFEDD):
 
                         self._background_old_drift_detectors[i].update(drift_input) # type: ignore
-                        self._background_data_grace_period[i].append([k, drift_input])
+                        self._background_data_grace_period[i].append(drift_input)
 
-                    for _ in range(int(k)):
-                        self._drift_detectors[i].update(drift_input) # type: ignore
+                    self._drift_detectors[i].update(drift_input) # type: ignore
 
                     # if grace period is over, push weight changes on the old detector and train a new one
                     if self.grace_period > 0 \
@@ -114,10 +112,9 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                         self._warning_detectors[i] = self.warning_detector.clone()
                         self._drift_detectors[i] = self.drift_detector.clone()
 
-                        for k_weight, elem in self._background_data_grace_period[i]:
-                            for _ in range(k_weight):
-                                self._warning_detectors[i].update(elem)
-                                self._drift_detectors[i].update(elem)
+                        for elem in self._background_data_grace_period[i]:
+                            self._warning_detectors[i].update(elem)
+                            self._drift_detectors[i].update(elem)
 
                         self._background_data_grace_period[i] = []
                         self._background_old_drift_detectors[i] = None
