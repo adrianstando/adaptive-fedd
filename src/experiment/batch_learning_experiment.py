@@ -103,7 +103,7 @@ class BatchLearningExperiment(Experiment):
                     if isinstance(self.detector, AdaptiveFEDD):
                         self.detector.push_weight_changes(is_better=better_new_model == 2)
                         self._background_detector = self.base_detector.clone()
-                        for y_val in self._background_y_true:
+                        for y_val in self._background_y_true['value']:
                             self._background_detector.update(y_val) # type: ignore
 
                 else:
