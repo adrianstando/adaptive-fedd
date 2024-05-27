@@ -109,7 +109,7 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                         and len(self._background_data_grace_period[i]) == self.grace_period:
 
                         self._background_old_drift_detectors[i].push_weight_changes(
-                            is_better=self._metric[i].is_better_than(self._background_old_metric[i]) # checks test-than-train metric between the new and ol model
+                            is_better=self._metrics[i].is_better_than(self._background_old_metric[i]) # checks test-than-train metric between the new and ol model
                         )
                         self._warning_detectors[i] = self.warning_detector.clone()
                         self._drift_detectors[i] = self.drift_detector.clone()
