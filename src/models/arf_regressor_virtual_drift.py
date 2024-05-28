@@ -11,18 +11,19 @@ from src.detectors.adaptive_fedd import AdaptiveFEDD
 
 class ARFRegressorVirtualDrift(ARFRegressor):
     def __init__(self, drift_detector: VirtualDriftDetector, warning_detector: VirtualDriftDetector, 
-                 virtual_drift_columns: Optional[List[str]] = None, *args, **kwargs):
+                 virtual_drift_columns: Optional[List[str]] = None, model_columns: Optional[List[str]] = None, *args, **kwargs):
         super().__init__(
             drift_detector=drift_detector, warning_detector=warning_detector, 
             *args, **kwargs
         )
         self._rng = random.Random(self.seed)
         self.virtual_drift_columns = virtual_drift_columns
+        self.model_columns = model_columns
 
         if hasattr(drift_detector, 'grace_period'):
-            self.grace_period = drift_detector.grace_period # type: ignore
+            self.grace_period_update_detector = drift_detector.grace_period # type: ignore
         else:
-            self.grace_period = 0
+            self.grace_period_update_detector = 0
 
         self._background_old_drift_detectors = [None for _ in range(self.n_models)]
         self._background_old_trees = [None for _ in range(self.n_models)]
@@ -46,13 +47,24 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                 else:
                     drift_input.append(x[column])
         
+        # filter columns for model
+        if self.model_columns is None:
+            model_input = x
+        else:
+            model_input = {}
+            for column in self.model_columns:
+                if column not in x.keys():
+                    return
+                else:
+                    model_input[column] = x[column]
+        
         # the function is very similar to the original one with one major change: 
         # the detectors are virtual drift detectors, which accept as an input a list of values
         if len(self) == 0:
-            self._init_ensemble(sorted(x.keys()))
+            self._init_ensemble(sorted(model_input.keys()))
 
         for i, model in enumerate(self):
-            y_pred = model.predict_one(x)
+            y_pred = model.predict_one(model_input)
 
             # Update performance evaluator
             self._metrics[i].update(
@@ -64,18 +76,19 @@ class ARFRegressorVirtualDrift(ARFRegressor):
             if self._background_old_trees[i] is not None:
                 self._background_old_metric[i].update(
                     y_true=y,
-                    y_pred=self._background_old_trees[i].predict_one(x),
+                    y_pred=self._background_old_trees[i].predict_one(model_input),
                 )
 
             k = poisson(rate=self.lambda_value, rng=self._rng) # type: ignore
             if k > 0:
                 if not self._warning_detection_disabled and self._background[i] is not None:
-                    self._background[i].learn_one(x=x, y=y, w=k)  # type: ignore
+                    self._background[i].learn_one(x=model_input, y=y, w=k)  # type: ignore
 
-                model.learn_one(x=x, y=y, w=k)
+                model.learn_one(x=model_input, y=y, w=k)
 
                 if not self._warning_detection_disabled:
-                    self._warning_detectors[i].update(drift_input) # type: ignore
+                    for _ in range(k):
+                        self._warning_detectors[i].update(drift_input) # type: ignore
 
                     if self._warning_detectors[i].drift_detected:
                         self._background[i] = self._new_base_model()  # type: ignore
@@ -91,30 +104,38 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                         self._warning_tracker[i] += 1
 
                 if not self._drift_detection_disabled:
-                    if self.grace_period > 0  \
+                    if self.grace_period_update_detector > 0  \
                         and self._background_old_drift_detectors[i] is not None \
                         and isinstance(self._drift_detectors[i], AdaptiveFEDD):
 
-                        self._background_old_drift_detectors[i].update(drift_input) # type: ignore
-                        self._background_data_grace_period[i].append(drift_input)
+                        for _ in range(k):
+                            self._background_old_drift_detectors[i].update(drift_input) # type: ignore
+                        self._background_data_grace_period[i].append((k, drift_input))
 
-                    self._drift_detectors[i].update(drift_input) # type: ignore
+                    for _ in range(k):
+                        self._drift_detectors[i].update(drift_input) # type: ignore
 
                     # if grace period is over, push weight changes on the old detector and train a new one
-                    if self.grace_period > 0 \
+                    if self.grace_period_update_detector > 0 \
                         and self._background_old_drift_detectors[i] is not None \
                         and isinstance(self._drift_detectors[i], AdaptiveFEDD) \
-                        and len(self._background_data_grace_period[i]) == self.grace_period:
+                        and len(self._background_data_grace_period[i]) == self.grace_period_update_detector:
+
+                        print('Push!')
 
                         self._background_old_drift_detectors[i].push_weight_changes(
                             is_better=self._metrics[i].is_better_than(self._background_old_metric[i]) # checks test-than-train metric between the new and ol model
                         )
                         self._warning_detectors[i] = self.warning_detector.clone()
                         self._drift_detectors[i] = self.drift_detector.clone()
+                        if isinstance(self._drift_detectors[i], AdaptiveFEDD) and isinstance(self._warning_detectors[i], AdaptiveFEDD):
+                            self._warning_detectors[i].observed_features = self._drift_detectors[i].observed_features # type: ignore
 
-                        for elem in self._background_data_grace_period[i]:
-                            self._warning_detectors[i].update(elem)
-                            self._drift_detectors[i].update(elem)
+
+                        for k_weight, elem in self._background_data_grace_period[i]:
+                            for _ in range(k_weight):
+                                self._warning_detectors[i].update(elem)
+                                self._drift_detectors[i].update(elem)
 
                         self._background_data_grace_period[i] = []
                         self._background_old_drift_detectors[i] = None
@@ -124,7 +145,7 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                     if self._drift_detectors[i].drift_detected:
                         if not self._warning_detection_disabled and self._background[i] is not None:
                             # old detector and model to background
-                            if self.grace_period > 0 and isinstance(self._drift_detectors[i], AdaptiveFEDD):
+                            if self.grace_period_update_detector > 0 and isinstance(self._drift_detectors[i], AdaptiveFEDD):
                                 self._background_old_drift_detectors[i] = self._drift_detectors[i] # type: ignore
                                 self._background_old_trees[i] = self.data[i]
                                 self._background_old_metric[i] = self.metric.clone()
@@ -136,6 +157,8 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                             self._warning_detectors[i] = self.warning_detector.clone()
                             self._drift_detectors[i] = self.drift_detector.clone()
                             self._metrics[i] = self.metric.clone()
+                            if isinstance(self._drift_detectors[i], AdaptiveFEDD) and isinstance(self._warning_detectors[i], AdaptiveFEDD):
+                                self._warning_detectors[i].observed_features = self._drift_detectors[i].observed_features # type: ignore
                         else:
                             self.data[i] = self._new_base_model()
                             self._drift_detectors[i] = self.drift_detector.clone()
