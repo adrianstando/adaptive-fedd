@@ -315,6 +315,7 @@ class AdaptiveFEDD(FEDD):
             for f in self.feature_extractor.all_feature_names
         }
         self._drift_index = -1
+        self.last_calculated_features = None
 
     @property
     def grace_period(self):
@@ -337,7 +338,7 @@ class AdaptiveFEDD(FEDD):
                 observed_features=self.observed_features
             )
 
-    def update(self, x: Union[int, float, List]) -> None:        
+    def update(self, x: Union[int, float, List], calculated_feature_vector: Optional[pd.Series] = None) -> None:        
         append_to_queue(self._queue, x)
 
         # before training - just collect data
@@ -377,8 +378,13 @@ class AdaptiveFEDD(FEDD):
                 return
             s = list(self._queue)
 
-            v = self.feature_extractor.extract_features(pd.DataFrame({'value': s, 'timestamp': [i for i in range(len(s))]}))
-            v.index = [x.replace('value__', '').replace('values__', '') for x in v.index] # type: ignore
+            if calculated_feature_vector is not None:
+                v = calculated_feature_vector
+            else:
+                v = self.feature_extractor.extract_features(pd.DataFrame({'value': s, 'timestamp': [i for i in range(len(s))]}))
+                v.index = [x.replace('value__', '').replace('values__', '') for x in v.index] # type: ignore
+            self.last_calculated_features = v
+            
             self.add_features_to_history(v)
             v = list(v[self.observed_features])
 

@@ -63,6 +63,8 @@ class ARFRegressorVirtualDrift(ARFRegressor):
         if len(self) == 0:
             self._init_ensemble(sorted(model_input.keys()))
 
+        feature_vector = None
+
         for i, model in enumerate(self):
             y_pred = model.predict_one(model_input)
 
@@ -88,7 +90,11 @@ class ARFRegressorVirtualDrift(ARFRegressor):
 
                 if not self._warning_detection_disabled:
                     for _ in range(k):
-                        self._warning_detectors[i].update(drift_input) # type: ignore
+                        if isinstance(self._warning_detectors[i], AdaptiveFEDD):
+                            self._warning_detectors[i].update(drift_input, calculated_feature_vector=feature_vector) # type: ignore
+                            feature_vector = self._warning_detectors[i].last_calculated_features
+                        else:
+                            self._warning_detectors[i].update(drift_input)
 
                     if self._warning_detectors[i].drift_detected:
                         self._background[i] = self._new_base_model()  # type: ignore
@@ -109,19 +115,23 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                         and isinstance(self._drift_detectors[i], AdaptiveFEDD):
 
                         for _ in range(k):
-                            self._background_old_drift_detectors[i].update(drift_input) # type: ignore
-                        self._background_data_grace_period[i].append((k, drift_input))
+                            self._background_old_drift_detectors[i].update(drift_input, calculated_feature_vector=feature_vector) # type: ignore
+                            feature_vector = self._background_old_drift_detectors[i].last_calculated_features
+
+                        self._background_data_grace_period[i].append((k, drift_input, feature_vector))
 
                     for _ in range(k):
-                        self._drift_detectors[i].update(drift_input) # type: ignore
+                        if isinstance(self._drift_detectors[i], AdaptiveFEDD):
+                            self._drift_detectors[i].update(drift_input, calculated_feature_vector=feature_vector) # type: ignore
+                            feature_vector = self._drift_detectors[i].last_calculated_features
+                        else:
+                            self._drift_detectors[i].update(drift_input)
 
                     # if grace period is over, push weight changes on the old detector and train a new one
                     if self.grace_period_update_detector > 0 \
                         and self._background_old_drift_detectors[i] is not None \
                         and isinstance(self._drift_detectors[i], AdaptiveFEDD) \
                         and len(self._background_data_grace_period[i]) == self.grace_period_update_detector:
-
-                        print('Push!')
 
                         self._background_old_drift_detectors[i].push_weight_changes(
                             is_better=self._metrics[i].is_better_than(self._background_old_metric[i]) # checks test-than-train metric between the new and ol model
@@ -132,10 +142,10 @@ class ARFRegressorVirtualDrift(ARFRegressor):
                             self._warning_detectors[i].observed_features = self._drift_detectors[i].observed_features # type: ignore
 
 
-                        for k_weight, elem in self._background_data_grace_period[i]:
+                        for k_weight, elem, fv in self._background_data_grace_period[i]:
                             for _ in range(k_weight):
-                                self._warning_detectors[i].update(elem)
-                                self._drift_detectors[i].update(elem)
+                                self._warning_detectors[i].update(elem, calculated_feature_vector=fv)
+                                self._drift_detectors[i].update(elem, calculated_feature_vector=fv)
 
                         self._background_data_grace_period[i] = []
                         self._background_old_drift_detectors[i] = None
