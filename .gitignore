@@ -90,3 +90,7 @@ target/
 
 # SLURM scripts
 notebooks/*.slurm
+notebooks/*.py
+
+# pickle files
+*.pickle

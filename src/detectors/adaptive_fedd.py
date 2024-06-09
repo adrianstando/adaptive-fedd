@@ -5,10 +5,11 @@ import copy
 
 from copy import deepcopy
 from tsfresh import extract_features
+from scipy.spatial.distance import cosine
 from tsfresh.feature_extraction import feature_calculators
 from sklearn.feature_selection import mutual_info_regression
 from tsfresh.feature_extraction import ComprehensiveFCParameters
-from typing import Union, List, Dict, Optional
+from typing import Union, List, Dict, Optional, Tuple
 
 from .adwin import ADWIN
 from .fedd import FEDD, append_to_queue, slice_deque
@@ -104,7 +105,7 @@ class MetadataManager:
     def get_feature_names(self) -> List:
         return self.metadata['features'].tolist()
     
-    def sample_features(self, n: int = 30) -> List:
+    def sample_features(self, n: int = 30, return_weights: bool = False) -> Union[List, Tuple[List, List]]:
         sum_of_weights = np.sum(self.metadata['weight']) # type: ignore
         p = np.array(self.metadata['weight'] / sum_of_weights) # type: ignore
         features = np.array(self.metadata['features']) # type: ignore
@@ -116,7 +117,11 @@ class MetadataManager:
             p=p
         )
 
-        return list(features[selected_idx])
+        if return_weights:
+            weights = np.array(self.metadata['weight'])
+            return list(features[selected_idx]), list(weights[selected_idx])
+        else:
+            return list(features[selected_idx])
     
     def get_metadata(self) -> pd.DataFrame:
         return self.metadata
@@ -181,8 +186,8 @@ class AdaptiveFeatureExtarctor(FeatureExtractor):
             self.all_feature_names = self.metadata.get_feature_names()
             self.main_params = self.names_to_dict_with_params(self.all_feature_names)
     
-    def sample_features(self, n: int = 30) -> List:
-        return self.metadata.sample_features(n=n)
+    def sample_features(self, n: int = 30, return_weights: bool = False) -> Union[List, Tuple[List, List]]:
+        return self.metadata.sample_features(n=n, return_weights=return_weights)
 
     @staticmethod
     def names_to_dict_with_params(lst: List[str]) -> Dict:
@@ -302,13 +307,21 @@ class AdaptiveFeatureExtarctor(FeatureExtractor):
 
 class AdaptiveFEDD(FEDD):
     def __init__(self, window_size: int = 100, stride: int = 10, queue_data: bool = True,
-                 feature_extractor: AdaptiveFeatureExtarctor = AdaptiveFeatureExtarctor(), n_observed_features: int = 30, *args, **kwargs):
+                 feature_extractor: AdaptiveFeatureExtarctor = AdaptiveFeatureExtarctor(), 
+                 n_observed_features: int = 30, distance_with_weights: bool = False, *args, **kwargs):
         detector = ADWIN(*args, **kwargs)
         self._grace_period = detector.adwin.grace_period
         super().__init__(0.2, float("Inf"), window_size, stride, self._grace_period, queue_data)
         self.detector = detector
         self.feature_extractor = feature_extractor
-        self.observed_features = self.feature_extractor.sample_features(n_observed_features)
+        self.distance_with_weights = distance_with_weights
+
+        if distance_with_weights:
+            self.observed_features, self.observed_features_weights = self.feature_extractor.sample_features(n_observed_features, return_weights=True)
+        else:
+            self.observed_features = self.feature_extractor.sample_features(n_observed_features, return_weights=False)
+            self.observed_features_weights = None
+
         self.n_observed_features = n_observed_features
         self.feature_history = {
             f: []
@@ -325,6 +338,12 @@ class AdaptiveFEDD(FEDD):
     def grace_period(self, value):
         self._grace_period = value
         self.detector.adwin.grace_period = value
+
+    def compute_distance_to_initial(self, array: np.ndarray) -> float:
+        if not self.distance_with_weights:
+            return float(cosine(self.v0, array) / 2)
+        else:
+            return float(cosine(self.v0, array, w=self.observed_features_weights) / 2)
 
     def add_features_to_history(self, features: pd.Series) -> None:
         for name in features.index:
@@ -431,5 +450,12 @@ class AdaptiveFEDD(FEDD):
                 setattr(clone, attr, copy.deepcopy(value))
 
         clone.feature_extractor = self.feature_extractor # preserve feature extractor when creating a clone
-        clone.observed_features = clone.feature_extractor.sample_features(clone.n_observed_features) # new feature set for a clone
+        #clone.observed_features = clone.feature_extractor.sample_features(clone.n_observed_features, return_weights=clone.distance_with_weights) # new feature set for a clone
+
+        if clone.distance_with_weights:
+            clone.observed_features, clone.observed_features_weights = clone.feature_extractor.sample_features(clone.n_observed_features, return_weights=True) # new feature set for a clone
+        else:
+            clone.observed_features = clone.feature_extractor.sample_features(clone.n_observed_features, return_weights=False) # new feature set for a clone
+            clone.observed_features_weights = None
+
         return clone
