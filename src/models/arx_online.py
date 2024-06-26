@@ -8,8 +8,8 @@ class AROnline(time_series.SNARIMAX):
         self,
         p: int,
         regressor: base.Regressor | None = None,
-        y_hat_min: float = 0,
-        y_hat_max: float = 100
+        y_hat_min: float = float("-Inf"),
+        y_hat_max: float = float("Inf")
     ):
         super().__init__(p, 0, 0, 1, 0, 0, 0, regressor)
         self.y_hat_min = y_hat_min

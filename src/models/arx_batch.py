@@ -21,8 +21,8 @@ class ARBatch(time_series.SNARIMAX):
         p: int,
         regressor: SKLEARNModelProtocol = LinearRegression(),
         train_size: int = 1000,
-        y_hat_min: float = 0,
-        y_hat_max: float = 100
+        y_hat_min: float = float("-Inf"),
+        y_hat_max: float = float("Inf")
     ):
         super().__init__(p, 0, 0, 1, 0, 0, 0, None)
         self.regressor = regressor
