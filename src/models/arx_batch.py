@@ -20,13 +20,22 @@ class ARBatch(time_series.SNARIMAX):
         self,
         p: int,
         regressor: SKLEARNModelProtocol = LinearRegression(),
-        train_size: int = 1000
+        train_size: int = 1000,
+        y_hat_min: float = 0,
+        y_hat_max: float = 100
     ):
         super().__init__(p, 0, 0, 1, 0, 0, 0, None)
         self.regressor = regressor
         self.train_size = train_size - p
         self.__train_queue = []
         self.__trained = False
+        self.y_hat_min = y_hat_min
+        self.y_hat_max = y_hat_max
+    
+    def _bound_prediction(self, y):
+        y = max(self.y_hat_min, y)
+        y = min(self.y_hat_max, y)
+        return y
 
     def learn_one(self, y, x=None):
         if not self.__trained:
@@ -59,6 +68,7 @@ class ARBatch(time_series.SNARIMAX):
 
             x = pd.DataFrame(x, index=[0])
             y_pred = self.regressor.predict(x)[0]
+            y_pred = self._bound_prediction(y_pred)
 
             forecasts[t] = y_pred
             y_diff.appendleft(y_pred)
