@@ -443,6 +443,13 @@ class AdaptiveFEDD(FEDD):
 
         if not include_attributes:
             clone.feature_extractor = self.feature_extractor
+
+            if clone.distance_with_weights:
+                clone.observed_features, clone.observed_features_weights = clone.feature_extractor.sample_features(clone.n_observed_features, return_weights=True) # new feature set for a clone
+            else:
+                clone.observed_features = clone.feature_extractor.sample_features(clone.n_observed_features, return_weights=False) # new feature set for a clone
+                clone.observed_features_weights = None
+            
             return clone
 
         for attr, value in self.__dict__.items():
