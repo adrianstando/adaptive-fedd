@@ -28,3 +28,8 @@ class ADWIN(BasicDriftDetector, VirtualDriftDetector):
     def drift_detected(self) -> bool:
         return self.adwin.drift_detected
     
+    def clone(self, new_params: dict | None = None, include_attributes=False):
+        out = super().clone(new_params, include_attributes)
+        out.adwin = self.adwin.clone()
+        return out
+    

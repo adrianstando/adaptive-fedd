@@ -10,12 +10,19 @@ from src.detectors.adaptive_fedd import AdaptiveFEDD
 
 
 class ARFRegressorVirtualDrift(ARFRegressor):
-    def __init__(self, drift_detector: VirtualDriftDetector, warning_detector: VirtualDriftDetector, 
-                 virtual_drift_columns: Optional[List[str]] = None, model_columns: Optional[List[str]] = None, *args, **kwargs):
+    def __init__(
+            self, 
+            drift_detector: VirtualDriftDetector, warning_detector: VirtualDriftDetector, 
+            virtual_drift_columns: Optional[List[str]] = None, model_columns: Optional[List[str]] = None, 
+            grace_period: int = 50,
+            seed: int | None = None,
+        ):
+
         super().__init__(
             drift_detector=drift_detector, warning_detector=warning_detector, 
-            *args, **kwargs
+            grace_period=grace_period, seed=seed
         )
+
         self._rng = random.Random(self.seed)
         self.virtual_drift_columns = virtual_drift_columns
         self.model_columns = model_columns

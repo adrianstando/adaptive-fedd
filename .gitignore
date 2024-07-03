@@ -94,3 +94,6 @@ notebooks/*.py
 
 # pickle files
 *.pickle
+
+# zip files
+*.zip

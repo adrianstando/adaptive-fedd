@@ -28,3 +28,8 @@ class KSWIN(BasicDriftDetector, VirtualDriftDetector):
     def drift_detected(self) -> bool:
         return self.kswin.drift_detected
     
+    def clone(self, new_params: dict | None = None, include_attributes=False):
+        out = super().clone(new_params, include_attributes)
+        out.kswin = self.kswin.clone()
+        return out
+    

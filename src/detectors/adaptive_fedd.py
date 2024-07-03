@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import inspect
 import copy
+import os
 
 from copy import deepcopy
 from tsfresh import extract_features
@@ -10,6 +11,7 @@ from tsfresh.feature_extraction import feature_calculators
 from sklearn.feature_selection import mutual_info_regression
 from tsfresh.feature_extraction import ComprehensiveFCParameters
 from typing import Union, List, Dict, Optional, Tuple
+from collections import deque
 
 from .adwin import ADWIN
 from .fedd import FEDD, append_to_queue, slice_deque
@@ -440,6 +442,7 @@ class AdaptiveFEDD(FEDD):
                 if name != "_POSITIONAL_ARGS"
             },
         )
+        clone.detector = self.detector.clone()
 
         if not include_attributes:
             clone.feature_extractor = self.feature_extractor
@@ -456,8 +459,7 @@ class AdaptiveFEDD(FEDD):
             if attr not in params:
                 setattr(clone, attr, copy.deepcopy(value))
 
-        clone.feature_extractor = self.feature_extractor # preserve feature extractor when creating a clone
-        #clone.observed_features = clone.feature_extractor.sample_features(clone.n_observed_features, return_weights=clone.distance_with_weights) # new feature set for a clone
+        clone.feature_extractor = self.feature_extractor
 
         if clone.distance_with_weights:
             clone.observed_features, clone.observed_features_weights = clone.feature_extractor.sample_features(clone.n_observed_features, return_weights=True) # new feature set for a clone
