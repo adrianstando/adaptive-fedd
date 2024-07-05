@@ -91,6 +91,8 @@ target/
 # SLURM scripts
 notebooks/*.slurm
 notebooks/*.py
+notebooks/slurm/
+notebooks/other/
 
 # pickle files
 *.pickle
