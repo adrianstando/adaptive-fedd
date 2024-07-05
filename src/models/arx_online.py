@@ -23,11 +23,12 @@ class AROnline(time_series.SNARIMAX):
     
     def _bound_prediction(self, y):
         if self.y_hat_scaling == "minmax":
-            diff = self.y_hat_max - self.y_hat_min
-            lower_bound = self.y_hat_min - self.y_hat_scaling_confidence * diff
-            upper_bound = self.y_hat_max + self.y_hat_scaling_confidence * diff
-            y = max(lower_bound, y)
-            y = min(upper_bound, y)
+            if abs(self.y_hat_max) != float("Inf") and abs(self.y_hat_min) != float("Inf"):
+                diff = self.y_hat_max - self.y_hat_min
+                lower_bound = self.y_hat_min - self.y_hat_scaling_confidence * diff
+                upper_bound = self.y_hat_max + self.y_hat_scaling_confidence * diff
+                y = max(lower_bound, y)
+                y = min(upper_bound, y)
         else:
             y = max(self.y_hat_min, y)
             y = min(self.y_hat_max, y)
