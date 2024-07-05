@@ -47,8 +47,9 @@ class AROnline(time_series.SNARIMAX):
 
         # update max and min if min-max-scaling chosen
         if self.y_hat_scaling == "minmax":
-            self.y_hat_min = min(min(y_hist), self.y_hat_min)
-            self.y_hat_max = max(max(y_hist), self.y_hat_max)
+            if len(y_hist) > 0:
+                self.y_hat_min = min(min(y_hist), self.y_hat_min)
+                self.y_hat_max = max(max(y_hist), self.y_hat_max)
 
         for t, x in enumerate(xs):
             x = self._add_lag_features(x=x, Y=y_diff, errors=errors)
