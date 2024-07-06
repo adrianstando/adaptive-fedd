@@ -55,12 +55,11 @@ class AROnline(time_series.SNARIMAX):
         for t, x in enumerate(xs):
             x = self._add_lag_features(x=x, Y=y_diff, errors=errors)
 
-            y_pred = self.regressor.predict_one(x)
-            y_pred = self._bound_prediction(y_pred)
-            
+            y_pred = self.regressor.predict_one(x)            
             y_diff.appendleft(y_pred)
 
             forecasts[t] = self.differencer.undiff(y_pred, y_hist)
+            forecasts[t] = self._bound_prediction(forecasts[t])
             y_hist.appendleft(forecasts[t])
 
             errors.appendleft(0)
